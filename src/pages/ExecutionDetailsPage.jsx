@@ -30,9 +30,11 @@ export default function ExecutionDetailsPage() {
 
   const agentRuns = execution.agentRuns || [];
   const completedCount = agentRuns.filter((run) => run.status === "COMPLETED").length;
-  const totalDuration = formatDuration(execution.startedAt, execution.completedAt);
-  const finalWordCount = countWords(execution.finalOutput);
-  const totalWordCount = countWords([execution.finalOutput, ...agentRuns.map((run) => run.output || "")].join(" "));
+  const totalDuration = formatDurationMs(execution.durationMs, execution.startedAt, execution.completedAt);
+  const finalWordCount = execution.outputWordCount ?? countWords(execution.finalOutput);
+  const totalWordCount = agentRuns.reduce((total, run) => total + (run.outputWordCount ?? countWords(run.output)), finalWordCount);
+  const providerNames = uniqueValues(agentRuns.map((run) => run.providerName));
+  const modelNames = uniqueValues(agentRuns.map((run) => run.modelName));
 
   return (
     <main className="detail-page">
@@ -42,11 +44,15 @@ export default function ExecutionDetailsPage() {
         <div>
           <p className="eyebrow">Execution Trace</p>
           <h1>{execution.workflowName || "Workflow Execution"}</h1>
-          <p>This view uses recorded API fields and simple counts from stored text output.</p>
+          <p>This view prefers backend execution fields and only falls back to local counts when older API responses do not include them.</p>
         </div>
         <div className="hero-status-stack">
           <span className={`status-pill ${String(execution.status).toLowerCase()}`}>{execution.status}</span>
           <strong>{completedCount}/{agentRuns.length || 0} agents completed</strong>
+          <div className="export-actions">
+            <a href={`${API_BASE_URL}/executions/${id}/export/markdown`} target="_blank" rel="noreferrer">Markdown</a>
+            <a href={`${API_BASE_URL}/executions/${id}/export/json`} target="_blank" rel="noreferrer">JSON</a>
+          </div>
         </div>
       </header>
 
@@ -63,15 +69,15 @@ export default function ExecutionDetailsPage() {
       </section>
 
       <section className="execution-metrics-grid truth-metrics-grid">
-        <MetricCard label="Execution time" value={totalDuration} helper="From started and completed timestamps" />
+        <MetricCard label="Execution time" value={totalDuration} helper={execution.durationMs == null ? "Fallback from timestamps" : "From backend durationMs"} />
         <MetricCard label="Agents recorded" value={agentRuns.length} helper={`${completedCount} completed`} />
-        <MetricCard label="Total output words" value={formatNumber(totalWordCount)} helper="Counted from stored text" />
-        <MetricCard label="Final output words" value={formatNumber(finalWordCount)} helper="Counted from final answer" />
+        <MetricCard label="Total output words" value={formatNumber(totalWordCount)} helper="From backend outputWordCount where available" />
+        <MetricCard label="Final output words" value={formatNumber(finalWordCount)} helper={execution.outputWordCount == null ? "Fallback text count" : "From backend outputWordCount"} />
       </section>
 
       <section className="panel source-data-note">
         <strong>Source-backed display</strong>
-        <p>Usage, cost, model, provider, and scoring values are not shown until they exist in the backend response.</p>
+        <p>Provider and model values now display only when they are returned by the backend for recorded agent runs.</p>
       </section>
 
       <section className="detail-grid">
@@ -85,6 +91,8 @@ export default function ExecutionDetailsPage() {
           <div><span>Completed</span><strong>{formatDate(execution.completedAt)}</strong></div>
           <div><span>Total duration</span><strong>{totalDuration}</strong></div>
           <div><span>Agents</span><strong>{agentRuns.length}</strong></div>
+          <div><span>Providers</span><strong>{providerNames.length ? providerNames.join(", ") : "-"}</strong></div>
+          <div><span>Models</span><strong>{modelNames.length ? modelNames.join(", ") : "-"}</strong></div>
         </article>
       </section>
 
@@ -123,18 +131,20 @@ export default function ExecutionDetailsPage() {
 }
 
 function AgentRunCard({ run, index, isLast }) {
-  const wordCount = countWords(run.output);
+  const wordCount = run.outputWordCount ?? countWords(run.output);
   return (
     <article className="timeline-item enhanced-timeline-item premium-timeline-item">
       <div className="timeline-rail"><div className={`timeline-index ${String(run.status).toLowerCase()}`}>{agentIcon(run.agentType)}</div>{!isLast && <div className="timeline-line" />}</div>
       <div className="timeline-card enhanced-timeline-card premium-timeline-card">
         <div className="timeline-header">
           <div><div className="agent-title-row"><span className="step-label">Step {index + 1}</span><span className="badge">{run.agentType}</span></div><h3>{run.agentName}</h3></div>
-          <div className="timeline-status-stack"><span className={`status-pill ${String(run.status).toLowerCase()}`}>{run.status}</span><small>{formatDuration(run.startedAt, run.completedAt)}</small></div>
+          <div className="timeline-status-stack"><span className={`status-pill ${String(run.status).toLowerCase()}`}>{run.status}</span><small>{formatDurationMs(run.durationMs, run.startedAt, run.completedAt)}</small></div>
         </div>
         <div className="agent-summary-card">
           <div><span>Recorded role</span><p>{run.agentType || "Agent"} run stored as {run.agentName || "Unnamed agent"}.</p></div>
           <div><span>Stored output</span><p>{formatNumber(wordCount)} words recorded.</p></div>
+          <div><span>Provider</span><p>{run.providerName || "-"}</p></div>
+          <div><span>Model</span><p>{run.modelName || "-"}</p></div>
         </div>
         <div className="trace-meta"><span>Started: {formatDate(run.startedAt)}</span><span>Completed: {formatDate(run.completedAt)}</span><span>Output: {formatNumber(wordCount)} words</span></div>
         <details className="trace-details"><summary>View agent input</summary><pre className="light-pre">{run.input || "No input was stored for this agent run."}</pre></details>
@@ -145,7 +155,9 @@ function AgentRunCard({ run, index, isLast }) {
 }
 
 function RecordedStepLink({ fromRun, toRun }) {
-  return <div className="handoff-card truth-handoff-card"><div className="handoff-line" /><div className="handoff-content"><span>{fromRun.agentName} to {toRun.agentName}</span><strong>Next recorded step</strong><div className="handoff-items"><small>Previous output: {formatNumber(countWords(fromRun.output))} words</small><small>Next input: {formatNumber(countWords(toRun.input))} words</small><small>Next status: {toRun.status}</small></div></div></div>;
+  const previousWords = fromRun.outputWordCount ?? countWords(fromRun.output);
+  const nextInputWords = countWords(toRun.input);
+  return <div className="handoff-card truth-handoff-card"><div className="handoff-line" /><div className="handoff-content"><span>{fromRun.agentName} to {toRun.agentName}</span><strong>Next recorded step</strong><div className="handoff-items"><small>Previous output: {formatNumber(previousWords)} words</small><small>Next input: {formatNumber(nextInputWords)} words</small><small>Next status: {toRun.status}</small></div></div></div>;
 }
 
 function MetricCard({ label, value, helper }) {
@@ -168,7 +180,7 @@ function PageState({ title, message, isError = false }) {
 function countWords(value = "") {
   const text = String(value || "").trim();
   if (!text) return 0;
-  return text.split(" ").filter(Boolean).length;
+  return text.split(/\s+/).filter(Boolean).length;
 }
 
 function formatNumber(value) {
@@ -179,12 +191,18 @@ function formatDate(value) {
   return value ? new Date(value).toLocaleString() : "-";
 }
 
-function formatDuration(start, end) {
-  if (!start || !end) return "-";
-  const durationMs = new Date(end).getTime() - new Date(start).getTime();
-  if (Number.isNaN(durationMs) || durationMs < 0) return "-";
-  if (durationMs < 1000) return `${durationMs}ms`;
-  return `${Math.round(durationMs / 100) / 10}s`;
+function formatDurationMs(durationMs, start, end) {
+  let value = durationMs;
+  if (value == null && start && end) {
+    value = new Date(end).getTime() - new Date(start).getTime();
+  }
+  if (value == null || Number.isNaN(value) || value < 0) return "-";
+  if (value < 1000) return `${value}ms`;
+  return `${Math.round(value / 100) / 10}s`;
+}
+
+function uniqueValues(values) {
+  return [...new Set(values.filter((value) => value && value !== "unknown"))];
 }
 
 function agentLabel(type) {
