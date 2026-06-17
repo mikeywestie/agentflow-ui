@@ -5,6 +5,7 @@ import ExecutionDetailsPage from "./pages/ExecutionDetailsPage";
 import ExecutionsPage from "./pages/ExecutionsPage";
 import AgentsPage from "./pages/AgentsPage";
 import WorkflowsPage from "./pages/WorkflowsPage";
+import EmailToolsPage from "./pages/EmailToolsPage";
 
 export default function App() {
   return (
@@ -15,6 +16,7 @@ export default function App() {
         <Route path="/executions/:id" element={<ExecutionDetailsPage />} />
         <Route path="/agents" element={<AgentsPage />} />
         <Route path="/workflows" element={<WorkflowsPage />} />
+        <Route path="/tools/email" element={<EmailToolsPage />} />
       </Routes>
     </BrowserRouter>
   );
