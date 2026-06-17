@@ -70,8 +70,105 @@
   margin: 22px 0 12px;
 }
 
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.button-row button,
+.card-actions button,
+.danger-button {
+  border: none;
+  border-radius: 999px;
+  padding: 11px 18px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.card-actions {
+  padding-top: 14px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.card-actions button {
+  min-width: 92px;
+}
+
+.danger-button {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.danger-button:hover {
+  background: #fecaca;
+}
+
+.managed-card {
+  padding: 22px;
+  display: grid;
+  gap: 14px;
+}
+
+.managed-card h3 {
+  margin: 0;
+}
+
+.managed-card p {
+  margin: 0;
+  line-height: 1.65;
+}
+
+.managed-card-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.managed-card-header small {
+  color: #334155;
+  font-weight: 800;
+}
+
+.compact-details {
+  margin-top: 2px;
+}
+
+.compact-details summary {
+  width: fit-content;
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: #f1f5f9;
+  color: #0f172a;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.compact-details .light-pre {
+  margin-top: 12px;
+}
+
 @media (max-width: 960px) {
   .page-hero-card {
     min-height: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .button-row,
+  .card-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .button-row button,
+  .card-actions button,
+  .danger-button {
+    width: 100%;
   }
 }
