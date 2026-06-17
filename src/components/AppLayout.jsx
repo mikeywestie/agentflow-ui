@@ -15,6 +15,7 @@ export default function AppLayout({ children, title = "Orchestration Dashboard" 
           <Link to="/executions">Executions</Link>
           <Link to="/agents">Agents</Link>
           <Link to="/workflows">Workflows</Link>
+          <Link to="/tools/email">Email Tools</Link>
         </nav>
       </aside>
 
