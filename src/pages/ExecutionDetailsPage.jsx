@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import ReactMarkdown from "react-markdown";
 import { Link, useParams } from "react-router-dom";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api";
@@ -109,7 +110,7 @@ export default function ExecutionDetailsPage() {
 
                   <details open>
                     <summary>Output</summary>
-                    <pre className="dark-pre">{run.output}</pre>
+                    <MarkdownOutput value={run.output} />
                   </details>
                 </div>
               </article>
@@ -125,9 +126,21 @@ export default function ExecutionDetailsPage() {
           <p className="eyebrow">Result</p>
           <h2>Final Output</h2>
         </div>
-        <pre className="dark-pre">{execution.finalOutput}</pre>
+        <MarkdownOutput value={execution.finalOutput} />
       </section>
     </main>
+  );
+}
+
+function MarkdownOutput({ value }) {
+  if (!value) {
+    return <p className="empty-state">No output returned.</p>;
+  }
+
+  return (
+    <div className="markdown-output">
+      <ReactMarkdown>{value}</ReactMarkdown>
+    </div>
   );
 }
 
