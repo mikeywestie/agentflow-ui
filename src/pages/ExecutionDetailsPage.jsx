@@ -35,6 +35,8 @@ export default function ExecutionDetailsPage() {
     [agentRuns]
   );
   const totalDuration = formatDuration(execution?.startedAt, execution?.completedAt);
+  const outputMetrics = useMemo(() => calculateOutputMetrics(agentRuns, execution?.finalOutput), [agentRuns, execution?.finalOutput]);
+  const successRate = agentRuns.length ? Math.round((completedCount / agentRuns.length) * 100) : 0;
 
   if (loading) {
     return <PageState title="Loading execution" message="Fetching the recorded agent trace..." />;
@@ -64,6 +66,20 @@ export default function ExecutionDetailsPage() {
         </div>
       </header>
 
+      <section className="workflow-progress-panel">
+        <div className="section-heading">
+          <p className="eyebrow">Workflow Progress</p>
+          <h2>Request to final answer</h2>
+        </div>
+        <div className="progress-track">
+          <ProgressNode label="Request" icon="📝" status="completed" />
+          {agentRuns.map((run) => (
+            <ProgressNode key={run.id} label={agentLabel(run.agentType)} icon={agentIcon(run.agentType)} status={String(run.status).toLowerCase()} />
+          ))}
+          <ProgressNode label="Final Answer" icon="🏁" status={String(execution.status).toLowerCase()} />
+        </div>
+      </section>
+
       <section className="workflow-path-panel">
         <div className="section-heading">
           <p className="eyebrow">Workflow Path</p>
@@ -73,7 +89,7 @@ export default function ExecutionDetailsPage() {
           <div className="workflow-path">
             {agentRuns.map((run, index) => (
               <React.Fragment key={run.id}>
-                <div className="path-node">
+                <div className="path-node premium-path-node">
                   <span className={`agent-icon ${String(run.agentType).toLowerCase()}`}>{agentIcon(run.agentType)}</span>
                   <strong>{run.agentName}</strong>
                   <small>{run.agentType}</small>
@@ -85,6 +101,13 @@ export default function ExecutionDetailsPage() {
         ) : (
           <p className="empty-state">No workflow path could be built from this execution.</p>
         )}
+      </section>
+
+      <section className="execution-metrics-grid">
+        <MetricCard label="Execution time" value={totalDuration} helper="Full workflow duration" />
+        <MetricCard label="Success rate" value={`${successRate}%`} helper={`${completedCount}/${agentRuns.length || 0} completed`} />
+        <MetricCard label="Estimated tokens" value={formatNumber(outputMetrics.estimatedTokens)} helper="Approximate output volume" />
+        <MetricCard label="Estimated cost" value={outputMetrics.estimatedCost} helper="Local estimate only" />
       </section>
 
       <section className="detail-grid">
@@ -128,43 +151,10 @@ export default function ExecutionDetailsPage() {
         <div className="timeline enhanced-timeline">
           {agentRuns.length ? (
             agentRuns.map((run, index) => (
-              <article key={run.id} className="timeline-item enhanced-timeline-item">
-                <div className="timeline-rail">
-                  <div className={`timeline-index ${String(run.status).toLowerCase()}`}>{agentIcon(run.agentType)}</div>
-                  {index < agentRuns.length - 1 && <div className="timeline-line" />}
-                </div>
-
-                <div className="timeline-card enhanced-timeline-card">
-                  <div className="timeline-header">
-                    <div>
-                      <div className="agent-title-row">
-                        <span className="step-label">Step {index + 1}</span>
-                        <span className="badge">{run.agentType}</span>
-                      </div>
-                      <h3>{run.agentName}</h3>
-                    </div>
-                    <div className="timeline-status-stack">
-                      <span className={`status-pill ${String(run.status).toLowerCase()}`}>{run.status}</span>
-                      <small>{formatDuration(run.startedAt, run.completedAt)}</small>
-                    </div>
-                  </div>
-
-                  <div className="trace-meta">
-                    <span>Started: {formatDate(run.startedAt)}</span>
-                    <span>Completed: {formatDate(run.completedAt)}</span>
-                  </div>
-
-                  <details className="trace-details">
-                    <summary>View agent input</summary>
-                    <pre className="light-pre">{run.input}</pre>
-                  </details>
-
-                  <details className="trace-details" open>
-                    <summary>View agent output</summary>
-                    <MarkdownOutput value={run.output} />
-                  </details>
-                </div>
-              </article>
+              <React.Fragment key={run.id}>
+                <AgentTimelineItem run={run} index={index} isLast={index === agentRuns.length - 1} />
+                {index < agentRuns.length - 1 && <AgentHandoff fromRun={run} toRun={agentRuns[index + 1]} />}
+              </React.Fragment>
             ))
           ) : (
             <p className="empty-state">No agent runs were recorded for this execution.</p>
@@ -172,14 +162,144 @@ export default function ExecutionDetailsPage() {
         </div>
       </section>
 
-      <section className="panel final-output-panel final-result-card">
-        <div className="section-heading">
-          <p className="eyebrow">Result</p>
-          <h2>Final Output</h2>
+      <section className="panel final-output-panel final-result-card premium-final-result-card">
+        <div className="final-result-header">
+          <div>
+            <p className="eyebrow">Final Answer</p>
+            <h2>Review Complete</h2>
+            <p>The final response returned by the workflow after all agent handoffs.</p>
+          </div>
+          <div className="final-score-card">
+            <span>Workflow Score</span>
+            <strong>{successRate}/100</strong>
+          </div>
         </div>
-        <MarkdownOutput value={execution.finalOutput} />
+
+        <div className="final-summary-grid">
+          <div>
+            <span>Agents executed</span>
+            <strong>{agentRuns.length}</strong>
+          </div>
+          <div>
+            <span>Completed</span>
+            <strong>{completedCount}</strong>
+          </div>
+          <div>
+            <span>Duration</span>
+            <strong>{totalDuration}</strong>
+          </div>
+          <div>
+            <span>Output size</span>
+            <strong>{formatNumber(outputMetrics.wordCount)} words</strong>
+          </div>
+        </div>
+
+        <details className="full-output-details" open>
+          <summary>View final answer</summary>
+          <MarkdownOutput value={execution.finalOutput} />
+        </details>
       </section>
     </main>
+  );
+}
+
+function AgentTimelineItem({ run, index, isLast }) {
+  const summary = summarizeAgentOutput(run);
+
+  return (
+    <article className="timeline-item enhanced-timeline-item premium-timeline-item">
+      <div className="timeline-rail">
+        <div className={`timeline-index ${String(run.status).toLowerCase()}`}>{agentIcon(run.agentType)}</div>
+        {!isLast && <div className="timeline-line" />}
+      </div>
+
+      <div className="timeline-card enhanced-timeline-card premium-timeline-card">
+        <div className="timeline-header">
+          <div>
+            <div className="agent-title-row">
+              <span className="step-label">Step {index + 1}</span>
+              <span className="badge">{run.agentType}</span>
+            </div>
+            <h3>{run.agentName}</h3>
+          </div>
+          <div className="timeline-status-stack">
+            <span className={`status-pill ${String(run.status).toLowerCase()}`}>{run.status}</span>
+            <small>{formatDuration(run.startedAt, run.completedAt)}</small>
+          </div>
+        </div>
+
+        <div className="agent-summary-card">
+          <div>
+            <span>Objective</span>
+            <p>{summary.objective}</p>
+          </div>
+          <div>
+            <span>Result</span>
+            <p>{summary.result}</p>
+          </div>
+        </div>
+
+        <div className="agent-output-highlights">
+          {summary.highlights.map((highlight) => (
+            <span key={highlight}>✓ {highlight}</span>
+          ))}
+        </div>
+
+        <div className="trace-meta">
+          <span>Started: {formatDate(run.startedAt)}</span>
+          <span>Completed: {formatDate(run.completedAt)}</span>
+          <span>Output: {formatNumber(countWords(run.output))} words</span>
+        </div>
+
+        <details className="trace-details">
+          <summary>View agent input</summary>
+          <pre className="light-pre">{run.input}</pre>
+        </details>
+
+        <details className="trace-details full-output-details">
+          <summary>Expand full markdown output</summary>
+          <MarkdownOutput value={run.output} />
+        </details>
+      </div>
+    </article>
+  );
+}
+
+function AgentHandoff({ fromRun, toRun }) {
+  const handoffItems = inferHandoffItems(fromRun.output);
+
+  return (
+    <div className="handoff-card">
+      <div className="handoff-line" />
+      <div className="handoff-content">
+        <span>{fromRun.agentName} → {toRun.agentName}</span>
+        <strong>Output transferred</strong>
+        <div className="handoff-items">
+          {handoffItems.map((item) => (
+            <small key={item}>✓ {item}</small>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MetricCard({ label, value, helper }) {
+  return (
+    <article className="metric-card">
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <p>{helper}</p>
+    </article>
+  );
+}
+
+function ProgressNode({ label, icon, status }) {
+  return (
+    <div className={`progress-node ${status}`}>
+      <span>{icon}</span>
+      <strong>{label}</strong>
+    </div>
   );
 }
 
@@ -208,6 +328,97 @@ function PageState({ title, message, isError = false }) {
   );
 }
 
+function summarizeAgentOutput(run) {
+  const wordCount = countWords(run.output);
+  const sections = countMarkdownSections(run.output);
+  const listItems = countListItems(run.output);
+  const type = run.agentType;
+
+  if (type === "PLANNER") {
+    return {
+      objective: "Break the user request into a clear project plan.",
+      result: `Generated a planning document with ${sections} sections and ${listItems} structured points.`,
+      highlights: compactHighlights(["Requirements", "Risks", "Execution phases", `${formatNumber(wordCount)} words`]),
+    };
+  }
+
+  if (type === "BUILDER") {
+    return {
+      objective: "Transform the plan into a technical implementation design.",
+      result: `Produced architecture, entities, endpoints, services, and implementation notes across ${sections} sections.`,
+      highlights: compactHighlights(["Entities", "Endpoints", "Services", "Screens", `${formatNumber(wordCount)} words`]),
+    };
+  }
+
+  if (type === "REVIEWER") {
+    return {
+      objective: "Review the proposed solution for risks, gaps, and improvements.",
+      result: `Completed a technical review with ${sections} sections and ${listItems} review points.`,
+      highlights: compactHighlights(["Security review", "Data model feedback", "API concerns", "Final recommendations"]),
+    };
+  }
+
+  return {
+    objective: "Process the previous workflow output.",
+    result: `Returned ${formatNumber(wordCount)} words of agent output.`,
+    highlights: compactHighlights(["Processed input", "Generated output", `${formatNumber(wordCount)} words`]),
+  };
+}
+
+function compactHighlights(items) {
+  return items.slice(0, 5);
+}
+
+function inferHandoffItems(output = "") {
+  const lower = output.toLowerCase();
+  const candidates = [
+    ["Requirements", lower.includes("requirement")],
+    ["Risks", lower.includes("risk")],
+    ["Entities", lower.includes("entity") || lower.includes("entities")],
+    ["Endpoints", lower.includes("endpoint") || lower.includes("api")],
+    ["Services", lower.includes("service")],
+    ["Security notes", lower.includes("security") || lower.includes("jwt")],
+    ["Implementation notes", lower.includes("implementation")],
+    ["Recommendations", lower.includes("recommend")],
+  ];
+
+  const matched = candidates.filter(([, isMatch]) => isMatch).map(([label]) => label);
+  return matched.length ? matched.slice(0, 4) : ["Context", "Output", "Next agent input"];
+}
+
+function calculateOutputMetrics(agentRuns, finalOutput = "") {
+  const combinedOutput = [finalOutput, ...agentRuns.map((run) => run.output || "")].join(" ");
+  const wordCount = countWords(combinedOutput);
+  const estimatedTokens = Math.max(1, Math.round(wordCount * 1.35));
+  const estimatedCostValue = estimatedTokens * 0.000002;
+
+  return {
+    wordCount,
+    estimatedTokens,
+    estimatedCost: estimatedCostValue < 0.01 ? "< $0.01" : `$${estimatedCostValue.toFixed(2)}`,
+  };
+}
+
+function countWords(value = "") {
+  return value.trim() ? value.trim().split(/\s+/).length : 0;
+}
+
+function countMarkdownSections(value = "") {
+  const headingMatches = value.match(/^#{1,6}\s+/gm);
+  const numberedMatches = value.match(/^\d+(\.\d+)*\.\s+/gm);
+  return Math.max(headingMatches?.length || 0, numberedMatches?.length || 0, 1);
+}
+
+function countListItems(value = "") {
+  const listMatches = value.match(/^\s*[-*•]\s+/gm);
+  const numberedMatches = value.match(/^\s*\d+(\.\d+)*\.\s+/gm);
+  return (listMatches?.length || 0) + (numberedMatches?.length || 0);
+}
+
+function formatNumber(value) {
+  return new Intl.NumberFormat().format(value || 0);
+}
+
 function formatDate(value) {
   if (!value) {
     return "-";
@@ -233,6 +444,19 @@ function formatDuration(start, end) {
 
   const seconds = Math.round(durationMs / 100) / 10;
   return `${seconds}s`;
+}
+
+function agentLabel(type) {
+  switch (type) {
+    case "PLANNER":
+      return "Planner";
+    case "BUILDER":
+      return "Builder";
+    case "REVIEWER":
+      return "Reviewer";
+    default:
+      return "Agent";
+  }
 }
 
 function agentIcon(type) {
