@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
-const API_BASE_URL = "http://localhost:8080/api";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api";
 const AGENT_TYPES = ["PLANNER", "BUILDER", "REVIEWER"];
 
 const EMPTY_AGENT_FORM = {
@@ -39,6 +39,8 @@ export default function DashboardPage() {
   );
 
   function loadData() {
+    setError("");
+
     Promise.all([
       fetch(`${API_BASE_URL}/workflows`).then((r) => (r.ok ? r.json() : [])),
       fetch(`${API_BASE_URL}/agents`).then((r) => (r.ok ? r.json() : [])),
@@ -58,7 +60,7 @@ export default function DashboardPage() {
       })
       .catch((err) => {
         console.error(err);
-        setError("Could not connect to AgentFlow API.");
+        setError("Could not connect to AgentFlow API. Make sure the backend is running.");
       });
   }
 
@@ -209,373 +211,217 @@ export default function DashboardPage() {
   }
 
   return (
-    <div style={pageStyle}>
-      <h1>AgentFlow UI</h1>
-      <p>AI Agent Orchestration Dashboard</p>
+    <main className="app-shell">
+      <aside className="sidebar">
+        <div className="brand-mark">AF</div>
+        <div>
+          <p className="eyebrow">AgentFlow</p>
+          <h1>Orchestration Dashboard</h1>
+        </div>
+        <nav className="nav-list">
+          <a href="#run">Run Workflow</a>
+          <a href="#agents">Agents</a>
+          <a href="#workflows">Workflows</a>
+          <a href="#executions">Executions</a>
+        </nav>
+      </aside>
 
-      {error && <p style={errorStyle}>{error}</p>}
-      {success && <p style={successStyle}>{success}</p>}
+      <section className="content-area">
+        <header className="hero-card">
+          <div>
+            <p className="eyebrow">Local MVP v0.4.0</p>
+            <h2>Build, run, and inspect AI agent workflows.</h2>
+            <p>
+              Planner, Builder, and Reviewer agents can be chained into workflows, executed locally,
+              and reviewed through a traceable execution history.
+            </p>
+          </div>
+          <button className="secondary-button" onClick={loadData}>Refresh data</button>
+        </header>
 
-      <div style={cardsStyle}>
-        <Card title="Workflows" value={workflows.length} />
-        <Card title="Agents" value={agents.length} />
-        <Card title="Executions" value={executions.length} />
-      </div>
+        {error && <div className="alert alert-error">{error}</div>}
+        {success && <div className="alert alert-success">{success}</div>}
 
-      <section style={sectionStyle}>
-        <h2>Run Workflow</h2>
+        <section className="stats-grid">
+          <StatCard title="Workflows" value={workflows.length} description="Saved orchestration flows" />
+          <StatCard title="Agents" value={agents.length} description="Reusable specialist roles" />
+          <StatCard title="Executions" value={executions.length} description="Recorded workflow runs" />
+        </section>
 
-        <label style={labelStyle}>Workflow</label>
-        <select
-          value={selectedWorkflowId}
-          onChange={(e) => setSelectedWorkflowId(e.target.value)}
-          style={inputStyle}
-        >
-          {workflows.map((workflow) => (
-            <option key={workflow.id} value={workflow.id}>
-              {workflow.name}
-            </option>
-          ))}
-        </select>
+        <section id="run" className="panel run-panel">
+          <div className="section-heading">
+            <p className="eyebrow">Execute</p>
+            <h2>Run Workflow</h2>
+          </div>
 
-        <label style={labelStyle}>Request</label>
-        <textarea
-          value={request}
-          onChange={(e) => setRequest(e.target.value)}
-          rows={5}
-          style={textareaStyle}
-        />
-
-        <button onClick={runWorkflow} disabled={loading} style={buttonStyle}>
-          {loading ? "Running agents..." : "Run Workflow"}
-        </button>
-      </section>
-
-      <section style={twoColumnSectionStyle}>
-        <div style={panelStyle}>
-          <h2>Create Agent</h2>
-          <p style={mutedStyle}>Define a reusable AI specialist with its own role and system prompt.</p>
-
-          <label style={labelStyle}>Name</label>
-          <input
-            value={agentForm.name}
-            onChange={(e) => setAgentForm({ ...agentForm, name: e.target.value })}
-            placeholder="Example: Security Reviewer Agent"
-            style={inputStyle}
-          />
-
-          <label style={labelStyle}>Type</label>
-          <select
-            value={agentForm.type}
-            onChange={(e) => setAgentForm({ ...agentForm, type: e.target.value })}
-            style={inputStyle}
-          >
-            {AGENT_TYPES.map((type) => (
-              <option key={type} value={type}>{type}</option>
+          <label>Workflow</label>
+          <select value={selectedWorkflowId} onChange={(e) => setSelectedWorkflowId(e.target.value)}>
+            {workflows.length === 0 && <option value="">No workflows available</option>}
+            {workflows.map((workflow) => (
+              <option key={workflow.id} value={workflow.id}>{workflow.name}</option>
             ))}
           </select>
 
-          <label style={labelStyle}>Description</label>
-          <input
-            value={agentForm.description}
-            onChange={(e) => setAgentForm({ ...agentForm, description: e.target.value })}
-            placeholder="Short purpose for this agent"
-            style={inputStyle}
-          />
+          <label>Request</label>
+          <textarea value={request} onChange={(e) => setRequest(e.target.value)} rows={5} />
 
-          <label style={labelStyle}>System Prompt</label>
-          <textarea
-            value={agentForm.systemPrompt}
-            onChange={(e) => setAgentForm({ ...agentForm, systemPrompt: e.target.value })}
-            rows={6}
-            placeholder="You are a senior Spring Boot security reviewer..."
-            style={textareaStyle}
-          />
-
-          <label style={checkboxLabelStyle}>
-            <input
-              type="checkbox"
-              checked={agentForm.enabled}
-              onChange={(e) => setAgentForm({ ...agentForm, enabled: e.target.checked })}
-            />
-            Enabled
-          </label>
-
-          <button onClick={createAgent} disabled={creatingAgent} style={buttonStyle}>
-            {creatingAgent ? "Creating agent..." : "Create Agent"}
+          <button className="primary-button" onClick={runWorkflow} disabled={loading}>
+            {loading ? "Running agents..." : "Run Workflow"}
           </button>
-        </div>
+        </section>
 
-        <div style={panelStyle}>
-          <h2>Create Workflow</h2>
-          <p style={mutedStyle}>Choose agents in the exact order they should run.</p>
-
-          <label style={labelStyle}>Name</label>
-          <input
-            value={workflowForm.name}
-            onChange={(e) => setWorkflowForm({ ...workflowForm, name: e.target.value })}
-            placeholder="Example: Secure Architecture Workflow"
-            style={inputStyle}
-          />
-
-          <label style={labelStyle}>Description</label>
-          <input
-            value={workflowForm.description}
-            onChange={(e) => setWorkflowForm({ ...workflowForm, description: e.target.value })}
-            placeholder="What this workflow is used for"
-            style={inputStyle}
-          />
-
-          <label style={checkboxLabelStyle}>
-            <input
-              type="checkbox"
-              checked={workflowForm.enabled}
-              onChange={(e) => setWorkflowForm({ ...workflowForm, enabled: e.target.checked })}
-            />
-            Enabled
-          </label>
-
-          <h3>Workflow Steps</h3>
-          {enabledAgents.length === 0 && <p>No enabled agents available yet.</p>}
-
-          <div style={agentPickerStyle}>
-            {enabledAgents.map((agent) => {
-              const selectedIndex = workflowForm.agentIds.indexOf(agent.id);
-
-              return (
-                <label key={agent.id} style={agentChoiceStyle}>
-                  <input
-                    type="checkbox"
-                    checked={selectedIndex >= 0}
-                    onChange={() => toggleWorkflowAgent(agent.id)}
-                  />
-                  <span>
-                    {selectedIndex >= 0 ? `Step ${selectedIndex + 1}: ` : ""}
-                    <strong>{agent.name}</strong> ({agent.type})
-                  </span>
-                </label>
-              );
-            })}
-          </div>
-
-          {workflowForm.agentIds.length > 0 && (
-            <div style={previewStyle}>
-              <strong>Preview:</strong>{" "}
-              {workflowForm.agentIds
-                .map((id) => agents.find((agent) => agent.id === id)?.name || "Unknown Agent")
-                .join(" → ")}
+        <section className="two-column-grid">
+          <div className="panel">
+            <div className="section-heading">
+              <p className="eyebrow">Configure</p>
+              <h2>Create Agent</h2>
+              <p>Define a reusable specialist with a role and system prompt.</p>
             </div>
-          )}
 
-          <button onClick={createWorkflow} disabled={creatingWorkflow} style={buttonStyle}>
-            {creatingWorkflow ? "Creating workflow..." : "Create Workflow"}
-          </button>
-        </div>
-      </section>
+            <label>Name</label>
+            <input value={agentForm.name} onChange={(e) => setAgentForm({ ...agentForm, name: e.target.value })} placeholder="Security Reviewer Agent" />
 
-      <section style={sectionStyle}>
-        <h2>Agents</h2>
-        <div style={cardsStyle}>
-          {agents.map((agent) => (
-            <div key={agent.id} style={agentCardStyle}>
-              <h3>{agent.name}</h3>
-              <p><strong>Type:</strong> {agent.type}</p>
-              <p><strong>Status:</strong> {agent.enabled ? "Enabled" : "Disabled"}</p>
-              {agent.description && <p>{agent.description}</p>}
+            <label>Type</label>
+            <select value={agentForm.type} onChange={(e) => setAgentForm({ ...agentForm, type: e.target.value })}>
+              {AGENT_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+            </select>
+
+            <label>Description</label>
+            <input value={agentForm.description} onChange={(e) => setAgentForm({ ...agentForm, description: e.target.value })} placeholder="Short purpose for this agent" />
+
+            <label>System Prompt</label>
+            <textarea value={agentForm.systemPrompt} onChange={(e) => setAgentForm({ ...agentForm, systemPrompt: e.target.value })} rows={6} placeholder="You are a senior Spring Boot security reviewer..." />
+
+            <label className="checkbox-row">
+              <input type="checkbox" checked={agentForm.enabled} onChange={(e) => setAgentForm({ ...agentForm, enabled: e.target.checked })} />
+              Enabled
+            </label>
+
+            <button className="primary-button" onClick={createAgent} disabled={creatingAgent}>
+              {creatingAgent ? "Creating agent..." : "Create Agent"}
+            </button>
+          </div>
+
+          <div className="panel">
+            <div className="section-heading">
+              <p className="eyebrow">Design</p>
+              <h2>Create Workflow</h2>
+              <p>Choose enabled agents in the order they should run.</p>
             </div>
-          ))}
-        </div>
-      </section>
 
-      <section style={sectionStyle}>
-        <h2>Workflows</h2>
+            <label>Name</label>
+            <input value={workflowForm.name} onChange={(e) => setWorkflowForm({ ...workflowForm, name: e.target.value })} placeholder="Secure Architecture Workflow" />
 
-        {workflows.map((workflow) => (
-          <div key={workflow.id} style={panelStyle}>
-            <h3>{workflow.name}</h3>
-            <p>{workflow.description}</p>
-            <p><strong>Status:</strong> {workflow.enabled ? "Enabled" : "Disabled"}</p>
+            <label>Description</label>
+            <input value={workflowForm.description} onChange={(e) => setWorkflowForm({ ...workflowForm, description: e.target.value })} placeholder="What this workflow is used for" />
 
-            <strong>Steps:</strong>
-            <ul>
-              {workflow.steps?.map((step) => (
-                <li key={step.id}>
-                  Step {step.stepOrder}: {step.agentName} ({step.agentType})
-                </li>
-              ))}
-            </ul>
+            <label className="checkbox-row">
+              <input type="checkbox" checked={workflowForm.enabled} onChange={(e) => setWorkflowForm({ ...workflowForm, enabled: e.target.checked })} />
+              Enabled
+            </label>
+
+            <h3 className="mini-heading">Workflow Steps</h3>
+            {enabledAgents.length === 0 && <p className="empty-state">No enabled agents available yet.</p>}
+
+            <div className="choice-list">
+              {enabledAgents.map((agent) => {
+                const selectedIndex = workflowForm.agentIds.indexOf(agent.id);
+
+                return (
+                  <label key={agent.id} className="choice-card">
+                    <input type="checkbox" checked={selectedIndex >= 0} onChange={() => toggleWorkflowAgent(agent.id)} />
+                    <span>
+                      {selectedIndex >= 0 ? `Step ${selectedIndex + 1}: ` : ""}
+                      <strong>{agent.name}</strong> <small>{agent.type}</small>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+
+            {workflowForm.agentIds.length > 0 && (
+              <div className="preview-box">
+                {workflowForm.agentIds.map((id) => agents.find((agent) => agent.id === id)?.name || "Unknown Agent").join(" -> ")}
+              </div>
+            )}
+
+            <button className="primary-button" onClick={createWorkflow} disabled={creatingWorkflow}>
+              {creatingWorkflow ? "Creating workflow..." : "Create Workflow"}
+            </button>
           </div>
-        ))}
-      </section>
+        </section>
 
-      <section style={sectionStyle}>
-        <h2>Recent Executions</h2>
-
-        {executions.map((execution) => (
-          <div key={execution.id} style={panelStyle}>
-            <h3>{execution.workflowName}</h3>
-
-            <p>
-              <strong>Status:</strong> {execution.status}
-            </p>
-
-            <p>
-              <strong>Request:</strong> {execution.request}
-            </p>
-
-            <Link to={`/executions/${execution.id}`} style={linkButtonStyle}>
-              View Details
-            </Link>
+        <section id="agents" className="panel">
+          <div className="section-heading">
+            <p className="eyebrow">Library</p>
+            <h2>Agents</h2>
           </div>
-        ))}
+          <div className="card-grid">
+            {agents.length === 0 && <p className="empty-state">No agents found yet.</p>}
+            {agents.map((agent) => (
+              <article key={agent.id} className="info-card">
+                <span className="badge">{agent.type}</span>
+                <h3>{agent.name}</h3>
+                <p>{agent.description || "No description provided."}</p>
+                <small>{agent.enabled ? "Enabled" : "Disabled"}</small>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section id="workflows" className="panel">
+          <div className="section-heading">
+            <p className="eyebrow">Flows</p>
+            <h2>Workflows</h2>
+          </div>
+          <div className="stack-list">
+            {workflows.length === 0 && <p className="empty-state">No workflows found yet.</p>}
+            {workflows.map((workflow) => (
+              <article key={workflow.id} className="workflow-card">
+                <div>
+                  <span className="badge">{workflow.enabled ? "Enabled" : "Disabled"}</span>
+                  <h3>{workflow.name}</h3>
+                  <p>{workflow.description || "No description provided."}</p>
+                </div>
+                <ol>
+                  {workflow.steps?.map((step) => (
+                    <li key={step.id}>{step.agentName} <small>{step.agentType}</small></li>
+                  ))}
+                </ol>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section id="executions" className="panel">
+          <div className="section-heading">
+            <p className="eyebrow">History</p>
+            <h2>Recent Executions</h2>
+          </div>
+          <div className="execution-list">
+            {executions.length === 0 && <p className="empty-state">No executions have been recorded yet.</p>}
+            {executions.map((execution) => (
+              <Link key={execution.id} to={`/executions/${execution.id}`} className="execution-row">
+                <div>
+                  <strong>{execution.workflowName || "Workflow execution"}</strong>
+                  <span>{execution.request}</span>
+                </div>
+                <span className={`status-pill ${String(execution.status).toLowerCase()}`}>{execution.status}</span>
+              </Link>
+            ))}
+          </div>
+        </section>
       </section>
-    </div>
+    </main>
   );
 }
 
-function Card({ title, value }) {
+function StatCard({ title, value, description }) {
   return (
-    <div style={cardStyle}>
-      <p>{title}</p>
-      <h2>{value}</h2>
-    </div>
+    <article className="stat-card">
+      <span>{title}</span>
+      <strong>{value}</strong>
+      <p>{description}</p>
+    </article>
   );
 }
-
-const pageStyle = {
-  fontFamily: "Arial",
-  padding: 24,
-  maxWidth: 1200,
-  margin: "0 auto",
-};
-
-const cardsStyle = {
-  display: "flex",
-  gap: 16,
-  marginTop: 24,
-  flexWrap: "wrap",
-};
-
-const sectionStyle = {
-  marginTop: 32,
-};
-
-const twoColumnSectionStyle = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-  gap: 16,
-  marginTop: 32,
-};
-
-const cardStyle = {
-  border: "1px solid #ddd",
-  borderRadius: 12,
-  padding: 20,
-  minWidth: 160,
-  background: "#f9f9f9",
-};
-
-const panelStyle = {
-  border: "1px solid #ddd",
-  borderRadius: 12,
-  padding: 20,
-  marginBottom: 16,
-  background: "#fff",
-};
-
-const agentCardStyle = {
-  ...cardStyle,
-  flex: "1 1 260px",
-};
-
-const labelStyle = {
-  display: "block",
-  fontWeight: "bold",
-  marginTop: 12,
-  marginBottom: 6,
-};
-
-const checkboxLabelStyle = {
-  display: "flex",
-  alignItems: "center",
-  gap: 8,
-  fontWeight: "bold",
-  marginTop: 12,
-};
-
-const inputStyle = {
-  width: "100%",
-  padding: 10,
-  borderRadius: 8,
-  border: "1px solid #ccc",
-  boxSizing: "border-box",
-};
-
-const textareaStyle = {
-  width: "100%",
-  padding: 10,
-  borderRadius: 8,
-  border: "1px solid #ccc",
-  fontFamily: "Arial",
-  boxSizing: "border-box",
-};
-
-const buttonStyle = {
-  marginTop: 12,
-  padding: "12px 18px",
-  border: "none",
-  borderRadius: 8,
-  background: "#111827",
-  color: "white",
-  cursor: "pointer",
-};
-
-const linkButtonStyle = {
-  display: "inline-block",
-  marginTop: 10,
-  padding: "10px 14px",
-  borderRadius: 8,
-  background: "#111827",
-  color: "white",
-  textDecoration: "none",
-};
-
-const agentPickerStyle = {
-  display: "flex",
-  flexDirection: "column",
-  gap: 8,
-};
-
-const agentChoiceStyle = {
-  display: "flex",
-  alignItems: "center",
-  gap: 8,
-  padding: 10,
-  border: "1px solid #ddd",
-  borderRadius: 8,
-};
-
-const previewStyle = {
-  marginTop: 12,
-  padding: 12,
-  background: "#f7f7f7",
-  borderRadius: 8,
-};
-
-const mutedStyle = {
-  color: "#555",
-};
-
-const errorStyle = {
-  color: "#b91c1c",
-  background: "#fee2e2",
-  padding: 12,
-  borderRadius: 8,
-};
-
-const successStyle = {
-  color: "#166534",
-  background: "#dcfce7",
-  padding: 12,
-  borderRadius: 8,
-};
