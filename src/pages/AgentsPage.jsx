@@ -8,7 +8,8 @@ const EMPTY_AGENT_FORM = { name: "", description: "", type: "PLANNER", systemPro
 export default function AgentsPage() {
   const [agents, setAgents] = useState([]);
   const [agentForm, setAgentForm] = useState(EMPTY_AGENT_FORM);
-  const [creatingAgent, setCreatingAgent] = useState(false);
+  const [editingAgentId, setEditingAgentId] = useState(null);
+  const [savingAgent, setSavingAgent] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -22,37 +23,99 @@ export default function AgentsPage() {
 
   useEffect(() => { loadAgents(); }, []);
 
-  async function createAgent() {
-    setError("");
-    setSuccess("");
-
+  function validateForm() {
     if (!agentForm.name.trim()) {
       setError("Agent name is required.");
-      return;
+      return false;
     }
 
     if (!agentForm.systemPrompt.trim()) {
       setError("Agent instructions are required.");
-      return;
+      return false;
     }
 
-    setCreatingAgent(true);
+    return true;
+  }
+
+  async function saveAgent() {
+    setError("");
+    setSuccess("");
+
+    if (!validateForm()) return;
+
+    setSavingAgent(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/agents`, {
-        method: "POST",
+      const isEditing = Boolean(editingAgentId);
+      const response = await fetch(`${API_BASE_URL}/agents${isEditing ? `/${editingAgentId}` : ""}`, {
+        method: isEditing ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(agentForm),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.message || "Could not create agent.");
-      setAgents((previous) => [...previous, data]);
+      if (!response.ok) throw new Error(data.message || "Could not save agent.");
+
+      setAgents((previous) => isEditing ? previous.map((agent) => agent.id === data.id ? data : agent) : [...previous, data]);
       setAgentForm(EMPTY_AGENT_FORM);
-      setSuccess(`Agent created: ${data.name}`);
+      setEditingAgentId(null);
+      setSuccess(isEditing ? `Agent updated: ${data.name}` : `Agent created: ${data.name}`);
     } catch (err) {
-      setError(err.message || "Could not create agent.");
+      setError(err.message || "Could not save agent.");
     } finally {
-      setCreatingAgent(false);
+      setSavingAgent(false);
+    }
+  }
+
+  function startEdit(agent) {
+    setError("");
+    setSuccess("");
+    setEditingAgentId(agent.id);
+    setAgentForm({
+      name: agent.name || "",
+      description: agent.description || "",
+      type: agent.type || "PLANNER",
+      systemPrompt: agent.systemPrompt || "",
+      enabled: agent.enabled !== false,
+    });
+  }
+
+  function cancelEdit() {
+    setEditingAgentId(null);
+    setAgentForm(EMPTY_AGENT_FORM);
+    setError("");
+  }
+
+  async function toggleEnabled(agent) {
+    setError("");
+    setSuccess("");
+
+    try {
+      const nextEnabled = !agent.enabled;
+      const response = await fetch(`${API_BASE_URL}/agents/${agent.id}/enabled?enabled=${nextEnabled}`, { method: "PATCH" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || "Could not update agent status.");
+      setAgents((previous) => previous.map((item) => item.id === data.id ? data : item));
+      setSuccess(`${data.name} ${data.enabled ? "enabled" : "disabled"}.`);
+    } catch (err) {
+      setError(err.message || "Could not update agent status.");
+    }
+  }
+
+  async function deleteAgent(agent) {
+    setError("");
+    setSuccess("");
+
+    const confirmed = window.confirm(`Delete agent "${agent.name}"? This cannot be undone.`);
+    if (!confirmed) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/agents/${agent.id}`, { method: "DELETE" });
+      if (!response.ok) throw new Error("Could not delete agent.");
+      setAgents((previous) => previous.filter((item) => item.id !== agent.id));
+      if (editingAgentId === agent.id) cancelEdit();
+      setSuccess(`Agent deleted: ${agent.name}`);
+    } catch (err) {
+      setError(err.message || "Could not delete agent. It may still be used by a workflow.");
     }
   }
 
@@ -72,7 +135,10 @@ export default function AgentsPage() {
 
       <section className="two-column-grid">
         <div className="panel">
-          <div className="section-heading"><p className="eyebrow">Configure</p><h2>Create Agent</h2></div>
+          <div className="section-heading">
+            <p className="eyebrow">Configure</p>
+            <h2>{editingAgentId ? "Edit Agent" : "Create Agent"}</h2>
+          </div>
           <label>Name</label>
           <input value={agentForm.name} onChange={(e) => setAgentForm({ ...agentForm, name: e.target.value })} placeholder="Planner Agent" />
           <label>Type</label>
@@ -84,14 +150,35 @@ export default function AgentsPage() {
           <label>Instructions</label>
           <textarea value={agentForm.systemPrompt} onChange={(e) => setAgentForm({ ...agentForm, systemPrompt: e.target.value })} rows={8} />
           <label className="checkbox-row"><input type="checkbox" checked={agentForm.enabled} onChange={(e) => setAgentForm({ ...agentForm, enabled: e.target.checked })} />Enabled</label>
-          <button className="primary-button" onClick={createAgent} disabled={creatingAgent}>{creatingAgent ? "Creating agent..." : "Create Agent"}</button>
+          <div className="button-row">
+            <button className="primary-button" onClick={saveAgent} disabled={savingAgent}>{savingAgent ? "Saving agent..." : editingAgentId ? "Update Agent" : "Create Agent"}</button>
+            {editingAgentId && <button className="secondary-button" onClick={cancelEdit}>Cancel</button>}
+          </div>
         </div>
 
         <div className="panel">
           <div className="section-heading"><p className="eyebrow">Library</p><h2>Current Agents</h2></div>
           <div className="card-grid single-column-card-grid">
             {agents.length === 0 && <p className="empty-state">No agents found yet.</p>}
-            {agents.map((agent) => <article key={agent.id} className="info-card"><span className="badge">{agent.type}</span><h3>{agent.name}</h3><p>{agent.description || "No description provided."}</p><small>{agent.enabled ? "Enabled" : "Disabled"}</small></article>)}
+            {agents.map((agent) => (
+              <article key={agent.id} className="info-card managed-card">
+                <div className="managed-card-header">
+                  <span className="badge">{agent.type}</span>
+                  <small>{agent.enabled ? "Enabled" : "Disabled"}</small>
+                </div>
+                <h3>{agent.name}</h3>
+                <p>{agent.description || "No description provided."}</p>
+                <details className="compact-details">
+                  <summary>View instructions</summary>
+                  <pre className="light-pre">{agent.systemPrompt || "No instructions stored."}</pre>
+                </details>
+                <div className="button-row card-actions">
+                  <button className="secondary-button" onClick={() => startEdit(agent)}>Edit</button>
+                  <button className="secondary-button" onClick={() => toggleEnabled(agent)}>{agent.enabled ? "Disable" : "Enable"}</button>
+                  <button className="danger-button" onClick={() => deleteAgent(agent)}>Delete</button>
+                </div>
+              </article>
+            ))}
           </div>
         </div>
       </section>
