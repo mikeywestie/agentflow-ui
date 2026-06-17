@@ -153,9 +153,111 @@
   margin-top: 12px;
 }
 
+.tool-status-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.tool-status-card,
+.email-message-card,
+.email-detail-card,
+.proposal-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #ffffff;
+  padding: 18px;
+}
+
+.tool-status-card {
+  display: grid;
+  gap: 8px;
+}
+
+.tool-status-card strong {
+  color: #0f172a;
+}
+
+.tool-status-card span {
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.tool-status-card.active {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.tool-status-card.pending {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.permission-list {
+  display: grid;
+  gap: 14px;
+}
+
+.permission-list div {
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 14px;
+  background: #f8fafc;
+}
+
+.permission-list p {
+  margin: 6px 0 0;
+  color: #64748b;
+  line-height: 1.6;
+}
+
+.email-tool-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 22px;
+  margin-top: 22px;
+}
+
+.email-message-card,
+.email-detail-card,
+.proposal-card {
+  display: grid;
+  gap: 12px;
+}
+
+.email-message-card h3,
+.email-detail-card h3,
+.proposal-card h3 {
+  margin: 0;
+}
+
+.email-message-card p,
+.email-detail-card p,
+.proposal-card p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.proposal-card {
+  margin-top: 18px;
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.proposal-card .danger-button:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+
 @media (max-width: 960px) {
   .page-hero-card {
     min-height: auto;
+  }
+
+  .tool-status-grid,
+  .email-tool-grid {
+    grid-template-columns: 1fr;
   }
 }
 
